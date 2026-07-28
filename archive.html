@@ -1,0 +1,123 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dartball Play Archive</title>
+    <style>
+        body {font-family:Arial,sans-serif; margin:20px; background:#f9f9f9;}
+        h1 {text-align:center;}
+        table {width:100%; border-collapse:collapse; background:white;}
+        th, td {border:1px solid #ccc; padding:10px; text-align:center;}
+        th {background:#2874a6; color:white;}
+        .restore-btn {background:#28a745; color:white; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;}
+        .delete-btn {background:#dc3545; color:white; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;}
+        .timestamp {font-size:0.85em; color:#666;}
+    </style>
+</head>
+<body>
+    <h1>Play Archive — Game <span id="gameNum">1</span></h1>
+    <p style="text-align:center;">Undone / Deleted plays (most recent first)</p>
+    
+    <button onclick="window.location.href='Index.html'" style="margin:10px;">← Back to Scorekeeper</button>
+    <button onclick="clearArchive()" style="margin:10px; background:#dc3545;">Clear Entire Archive</button>
+
+    <table id="archiveTable">
+        <thead>
+            <tr>
+                <th>Undone At</th>
+                <th>Inning</th>
+                <th>Half</th>
+                <th>Batter</th>
+                <th>Defender</th>
+                <th>Result</th>
+                <th>Def Play</th>
+                <th>Runs</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+<script>
+    let currentGame = 1;
+    const ARCHIVE_KEY = () => `dartball_game${currentGame}_archive`;
+
+    function loadArchive() {
+        currentGame = Number(document.getElementById('gameNum').textContent) || 1;
+        let archive = [];
+        try {
+            archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY()) || '[]');
+        } catch(e) {}
+
+        const tbody = document.querySelector('#archiveTable tbody');
+        tbody.innerHTML = '';
+
+        archive.forEach((play, i) => {
+            const date = new Date(play.undoneAt);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="timestamp">${date.toLocaleTimeString()}</td>
+                <td>${play.inning}</td>
+                <td>${play.team === 'A' ? 'Top' : 'Bottom'}</td>
+                <td>${escapeHtml(play.player || '-')}</td>
+                <td>${escapeHtml(play.defender || '-')}</td>
+                <td><strong>${escapeHtml(play.playType || '-')}</strong></td>
+                <td>${escapeHtml(play.defenderPlayType || '-')}</td>
+                <td>${play.runs || ''}</td>
+                <td>
+                    <button class="restore-btn" onclick="restorePlay(${i})">Restore</button>
+                    <button class="delete-btn" onclick="deleteFromArchive(${i})">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+  window.restorePlay = function(index) {
+    if (!confirm('Restore this play?')) return;
+    
+    let archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY()) || '[]');
+    const playToRestore = archive.splice(index, 1)[0];
+    
+    let mainPlays = [];
+    try {
+        mainPlays = JSON.parse(localStorage.getItem(`dartball_game${currentGame}_plays`) || '[]');
+    } catch(e) {}
+    
+    mainPlays.push(playToRestore);
+    
+    localStorage.setItem(`dartball_game${currentGame}_plays`, JSON.stringify(mainPlays));
+    localStorage.setItem(ARCHIVE_KEY(), JSON.stringify(archive));
+
+    // Signal main page + request full recalculation
+    localStorage.setItem('dartball_restore_signal', JSON.stringify({ action: 'restore', needsRecalc: true }));
+
+    alert('✅ Play restored!\n\nReturn to Scorekeeper and it will auto-recalculate.');
+    loadArchive();
+};
+    window.deleteFromArchive = function(index) {
+        if (!confirm('Permanently delete this archived play?')) return;
+        let archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY()) || '[]');
+        archive.splice(index, 1);
+        localStorage.setItem(ARCHIVE_KEY(), JSON.stringify(archive));
+        loadArchive();
+    };
+
+    window.clearArchive = function() {
+        if (confirm('Clear ALL archived plays for this game?')) {
+            localStorage.removeItem(ARCHIVE_KEY());
+            loadArchive();
+        }
+    };
+
+    // Init
+    document.getElementById('gameNum').textContent = currentGame;
+    loadArchive();
+</script>
+</body>
+</html>
